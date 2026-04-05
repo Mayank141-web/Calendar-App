@@ -33,12 +33,3 @@ cd Calendar-App
 mvn clean package
 java -jar target/CalendarApp.jar
 ```
-
-## Release a New Version
-
-```bash
-git tag v1.0.0
-git push --tags
-```
-
-GitHub Actions will automatically build and publish the AppImage to Releases.
