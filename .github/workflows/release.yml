@@ -5,6 +5,7 @@ name: Build & Release
 on:
   push:
     tags: ["v*"]
+    branches: [claude/fervent-knuth-0y7bmk]  # build-only check; publishing still needs a tag
   workflow_dispatch:
 
 permissions:
@@ -148,6 +149,8 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           name: MyCalendar v${{ env.APP_VERSION }}
+          tag_name: v${{ env.APP_VERSION }}
+          make_latest: true
           files: release/*
           body: |
             ## What's new in v2.0
