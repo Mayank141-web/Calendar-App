@@ -5,7 +5,7 @@ name: Build & Release
 on:
   push:
     tags: ["v*"]
-    branches: [claude/fervent-knuth-0y7bmk]  # build-only check; publishing still needs a tag
+    branches: [claude/fervent-knuth-0y7bmk]  # temporary: publishes v2.0 from this branch
   workflow_dispatch:
 
 permissions:
@@ -134,7 +134,7 @@ jobs:
   release:
     name: Publish release
     needs: [jar, package]
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/claude/fervent-knuth-0y7bmk'
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/download-artifact@v4
@@ -146,10 +146,16 @@ jobs:
           find artifacts -type f -exec mv {} release/ \;
           mv release/MyCalendar.jar "release/$APP_NAME-$APP_VERSION.jar"
           ls -la release
+      # v2.0 replaces v1.0: remove the old release (its FirstVersion tag stays in the git history)
+      - name: Remove the v1.0 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release delete FirstVersion --repo "$GITHUB_REPOSITORY" --yes || echo "v1.0 release already removed"
       - uses: softprops/action-gh-release@v2
         with:
           name: MyCalendar v${{ env.APP_VERSION }}
           tag_name: v${{ env.APP_VERSION }}
+          target_commitish: ${{ github.sha }}
           make_latest: true
           files: release/*
           body: |
