@@ -1,0 +1,171 @@
+# Builds MyCalendar for Windows, macOS and Linux and publishes the files to a GitHub Release.
+# Runs when a tag like "v2.0" is pushed, or manually from the Actions tab.
+name: Build & Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  APP_NAME: MyCalendar
+  APP_VERSION: "2.0"
+  JAVA_VERSION: "21"
+  PROJECT_DIR: Calendar-App-main/CalendarApp
+
+jobs:
+  jar:
+    name: Cross-platform JAR
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Compile and package JAR
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          javac --release 17 -d build/classes src/main/java/Calendar/*.java
+          cp -r src/main/resources/. build/classes/
+          mkdir -p build/jar
+          jar --create --file build/jar/MyCalendar.jar --main-class Calendar.Main -C build/classes .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jar
+          path: ${{ env.PROJECT_DIR }}/build/jar/MyCalendar.jar
+
+  package:
+    name: Package (${{ matrix.label }})
+    needs: jar
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-2022
+            label: Windows
+          - os: macos-latest
+            label: macOS-AppleSilicon
+          - os: macos-15-intel
+            label: macOS-Intel
+          - os: ubuntu-22.04
+            label: Linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: jar
+          path: input
+
+      - name: Install Linux packaging tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm fakeroot
+
+      - name: Build native packages
+        run: |
+          set -euo pipefail
+          ICONS="$PROJECT_DIR/packaging"
+          mkdir -p dist out
+          COMMON=(--name "$APP_NAME" --app-version "$APP_VERSION" --vendor "$APP_NAME"
+                  --description "Calendar and task manager with Light and Dark Mode"
+                  --input input --main-jar MyCalendar.jar --main-class Calendar.Main
+                  --add-modules java.desktop,java.prefs
+                  --jlink-options "--strip-debug --no-man-pages --no-header-files --compress=zip-9")
+
+          case "$RUNNER_OS" in
+            Windows)
+              WIN=(--icon "$ICONS/icon.ico")
+              jpackage "${COMMON[@]}" "${WIN[@]}" --type msi --dest out \
+                --win-menu --win-shortcut --win-dir-chooser --win-per-user-install \
+                --win-upgrade-uuid 5b0e4f53-7c43-4c2a-9b0e-6d2a1f1c8a20
+              mv out/*.msi "dist/$APP_NAME-$APP_VERSION-Windows-x64.msi"
+              jpackage "${COMMON[@]}" "${WIN[@]}" --type app-image --dest out
+              (cd out && 7z a -tzip "../dist/$APP_NAME-$APP_VERSION-Windows-x64-portable.zip" "$APP_NAME" > /dev/null)
+              ;;
+            macOS)
+              jpackage "${COMMON[@]}" --icon "$ICONS/icon.icns" --type dmg --dest out \
+                --mac-package-name "$APP_NAME"
+              mv out/*.dmg "dist/$APP_NAME-$APP_VERSION-${{ matrix.label }}.dmg"
+              ;;
+            Linux)
+              LNX=(--icon "$ICONS/icon-256.png")
+              LNX_INSTALL=(--linux-shortcut --linux-menu-group Office --linux-app-category office)
+              jpackage "${COMMON[@]}" "${LNX[@]}" "${LNX_INSTALL[@]}" --type deb --dest out
+              mv out/*.deb "dist/$APP_NAME-$APP_VERSION-Linux-amd64.deb"
+              jpackage "${COMMON[@]}" "${LNX[@]}" "${LNX_INSTALL[@]}" --type rpm --dest out
+              mv out/*.rpm "dist/$APP_NAME-$APP_VERSION-Linux-x86_64.rpm"
+
+              # Portable folder: works on any distro, just extract and run
+              jpackage "${COMMON[@]}" "${LNX[@]}" --type app-image --dest out
+              tar -C out -czf "dist/$APP_NAME-$APP_VERSION-Linux-x86_64.tar.gz" "$APP_NAME"
+
+              # AppImage: single file that runs on any distro
+              APPDIR=out/AppDir
+              mkdir -p "$APPDIR"
+              cp -r "out/$APP_NAME" "$APPDIR/$APP_NAME"
+              cp "$ICONS/icon-256.png" "$APPDIR/mycalendar.png"
+              cp "$PROJECT_DIR/packaging/mycalendar.desktop" "$APPDIR/mycalendar.desktop"
+              printf '#!/bin/sh\nHERE="$(dirname "$(readlink -f "$0")")"\nexec "$HERE/%s/bin/%s" "$@"\n' "$APP_NAME" "$APP_NAME" > "$APPDIR/AppRun"
+              chmod +x "$APPDIR/AppRun"
+              curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+              chmod +x appimagetool
+              APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 ./appimagetool "$APPDIR" "dist/$APP_NAME-$APP_VERSION-Linux-x86_64.AppImage"
+              ;;
+          esac
+          ls -la dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.label }}
+          path: dist/*
+
+  release:
+    name: Publish release
+    needs: [jar, package]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Collect files
+        run: |
+          mkdir -p release
+          find artifacts -type f -exec mv {} release/ \;
+          mv release/MyCalendar.jar "release/$APP_NAME-$APP_VERSION.jar"
+          ls -la release
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: MyCalendar v${{ env.APP_VERSION }}
+          files: release/*
+          body: |
+            ## What's new in v2.0
+            - **Light Mode / Dark Mode toggle** — your choice is saved in `calendar_data.ser` with the rest of your calendar, so the app reopens in the mode you left it in
+            - **Windows and Linux support** alongside macOS
+            - Tasks are listed in time order, the task editor is a proper dialog (Enter saves, Esc cancels)
+            - Safer saving: data is written to a temporary file first, so a crash can't corrupt your calendar
+            - Data files from v1.0 open without any changes
+
+            ## Which file do I download?
+            | System | File |
+            |---|---|
+            | Windows 10/11 | `MyCalendar-2.0-Windows-x64.msi` (installer) or `…-portable.zip` (no install) |
+            | macOS (Apple Silicon, M1 or newer) | `MyCalendar-2.0-macOS-AppleSilicon.dmg` |
+            | macOS (Intel) | `MyCalendar-2.0-macOS-Intel.dmg` |
+            | Ubuntu / Debian / Mint / Pop!_OS | `MyCalendar-2.0-Linux-amd64.deb` |
+            | Fedora / RHEL / openSUSE | `MyCalendar-2.0-Linux-x86_64.rpm` |
+            | Any Linux distro | `MyCalendar-2.0-Linux-x86_64.AppImage` or `.tar.gz` |
+            | Anything with Java 17+ | `MyCalendar-2.0.jar` |
+
+            The installers bundle their own Java runtime — nothing else to install.

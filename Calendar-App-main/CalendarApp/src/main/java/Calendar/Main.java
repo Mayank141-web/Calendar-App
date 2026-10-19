@@ -2,55 +2,59 @@ package Calendar;
 
 import javax.swing.*;
 import java.awt.*;
-import java.time.LocalDate;
+import java.net.URL;
+import java.util.Locale;
 
 public class Main {
     public static void main(String[] args) {
+        // Must be set before any AWT class loads
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        if (os.contains("mac")) {
+            System.setProperty("apple.awt.application.name", "MyCalendar");
+        } else if (!os.contains("win")) {
+            // Linux/BSD: smooth fonts even when the desktop doesn't advertise its settings
+            System.setProperty("awt.useSystemAAFontSettings", "on");
+            System.setProperty("swing.aatext", "true");
+        }
+
         SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("Calendar - Task Manager");
-            frame.setSize(1000, 600);
+            JFrame frame = new JFrame("MyCalendar");
+            frame.setSize(1100, 620);
+            frame.setMinimumSize(new Dimension(900, 500));
             frame.setLocationRelativeTo(null);
-            frame.getContentPane().setBackground(Color.white);
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+
+            URL icon = Main.class.getResource("/icon.png");
+            if (icon != null) frame.setIconImage(new ImageIcon(icon).getImage());
 
             // Loading screen
             JLabel loadingLabel = new JLabel("Searching for calendar data...", JLabel.CENTER);
-            loadingLabel.setFont(new Font("SansSerif", Font.PLAIN, 16));
+            loadingLabel.setFont(Theme.font(Font.PLAIN, 16));
             loadingLabel.setForeground(Color.GRAY);
             frame.getContentPane().add(loadingLabel);
             frame.setVisible(true);
 
             // Search and load on background thread, then populate UI
-            SwingWorker<TaskManager, Void> worker = new SwingWorker<>() {
+            new SwingWorker<TaskManager, Void>() {
                 @Override
                 protected TaskManager doInBackground() {
-                    String path = TaskManager.findFile();
-                    return TaskManager.loadData(path);
+                    return TaskManager.loadData(TaskManager.findFile());
                 }
 
                 @Override
                 protected void done() {
+                    TaskManager taskManager;
                     try {
-                        TaskManager taskManager = get();
-                        LocalDate date = LocalDate.now();
-
-                        JPanel mainPanel = new JPanel(new GridLayout(1, 2));
-                        mainPanel.setBackground(Color.white);
-                        mainPanel.add(new Calendar(date.getYear(), date.getMonthValue(), date, mainPanel, taskManager));
-                        mainPanel.add(new Events(date, mainPanel, taskManager));
-
-                        frame.getContentPane().removeAll();
-                        frame.getContentPane().add(mainPanel);
-                        frame.revalidate();
-                        frame.repaint();
-
-                        Runtime.getRuntime().addShutdownHook(new Thread(taskManager::saveData));
+                        taskManager = get();
                     } catch (Exception e) {
                         e.printStackTrace();
+                        taskManager = new TaskManager();
                     }
+                    new App(frame, taskManager);
+                    // Saves everything, including the current Light/Dark mode, when the app closes
+                    Runtime.getRuntime().addShutdownHook(new Thread(taskManager::saveData));
                 }
-            };
-            worker.execute();
+            }.execute();
         });
     }
 }
