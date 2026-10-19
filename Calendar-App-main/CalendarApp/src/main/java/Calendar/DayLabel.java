@@ -8,16 +8,16 @@ import javax.swing.JLabel;
 public class DayLabel extends JLabel {
 
     private static final long serialVersionUID = 1L;
+    private static final Font FONT = Theme.font(Font.PLAIN, 20);
 
     public DayLabel(String text, Color background, Color foreground, boolean btn) {
-        setText(text);
-        setHorizontalAlignment(JLabel.CENTER);
-        setFont(new Font("Helvetica", Font.PLAIN, 20));
+        super(text, JLabel.CENTER);
+        setFont(FONT);
         setOpaque(true);
         setBackground(background);
         setForeground(foreground);
         if (btn) {
-            setCursor(new Cursor(Cursor.HAND_CURSOR));
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         }
     }
 }

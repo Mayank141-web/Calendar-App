@@ -1,11 +1,12 @@
 package Calendar;
+
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Font;
 import java.awt.GridLayout;
+import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.event.MouseListener;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
@@ -16,152 +17,95 @@ import javax.swing.JPanel;
 public class Calendar extends JPanel {
 
     private static final long serialVersionUID = 1L;
-    public Calendar(int year, int month, LocalDate selectedDay, JPanel mainPanel, TaskManager taskManager) {
+    private static final DateTimeFormatter MONTH_FORMAT = DateTimeFormatter.ofPattern("MMMM yyyy");
+    private static final String[] WEEK_DAYS = {"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"};
+    private static final int TOTAL_CELLS = 42;
+
+    public Calendar(int year, int month, App app) {
         //Layout
         setLayout(new BorderLayout(30, 30));
         setBorder(BorderFactory.createEmptyBorder(40, 20, 30, 20));
-        setBackground(Color.white);
+        setBackground(Theme.background());
+
+        YearMonth shown = YearMonth.of(year, month);
 
         JPanel top = new JPanel(new BorderLayout(10, 10));
-        top.setBackground(null);
+        top.setOpaque(false);
 
         //Month
-        JLabel date = new JLabel(LocalDate.of(year, month, 1).format(DateTimeFormatter.ofPattern("MMMM yyyy")));
-        date.setHorizontalAlignment(JLabel.CENTER);
-        date.setFont(new Font("Helvetica", Font.BOLD, 30));
-        date.setForeground(Color.decode("#0ecf78"));
+        JLabel date = new JLabel(shown.format(MONTH_FORMAT), JLabel.CENTER);
+        date.setFont(Theme.font(Font.BOLD, 30));
+        date.setForeground(Theme.GREEN);
         top.add(date, BorderLayout.CENTER);
 
-        // Left arrow (previous month)
-        JLabel left = new JLabel("◀");
-        left.setFont(new Font("Arial", Font.BOLD, 20));
-        left.setForeground(Color.decode("#0ecf78"));
-        left.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        left.addMouseListener(new MouseListener() {
-            @Override
-            public void mouseReleased(MouseEvent e) {}
-            @Override
-            public void mousePressed(MouseEvent e) {}
-            @Override
-            public void mouseExited(MouseEvent e) {}
-            @Override
-            public void mouseEntered(MouseEvent e) {}
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                mainPanel.removeAll();
-                if (month != 1) {
-                    mainPanel.add(new Calendar(year, month - 1, selectedDay, mainPanel, taskManager));
-                } else {
-                    mainPanel.add(new Calendar(year - 1, 12, selectedDay, mainPanel, taskManager));
-                }
-                mainPanel.add(new Events(selectedDay, mainPanel, taskManager));
-                mainPanel.revalidate();
-                mainPanel.repaint();
-            }
-        });
-        top.add(left, BorderLayout.WEST);
-
-        // Right arrow (next month)
-        JLabel right = new JLabel("▶");
-        right.setFont(new Font("Arial", Font.BOLD, 20));
-        right.setForeground(Color.decode("#0ecf78"));
-        right.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        right.addMouseListener(new MouseListener() {
-            @Override
-            public void mouseReleased(MouseEvent e) {}
-            @Override
-            public void mousePressed(MouseEvent e) {}
-            @Override
-            public void mouseExited(MouseEvent e) {}
-            @Override
-            public void mouseEntered(MouseEvent e) {}
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                mainPanel.removeAll();
-                if (month != 12) {
-                    mainPanel.add(new Calendar(year, month + 1, selectedDay, mainPanel, taskManager));
-                } else {
-                    mainPanel.add(new Calendar(year + 1, 1, selectedDay, mainPanel, taskManager));
-                }
-                mainPanel.add(new Events(selectedDay, mainPanel, taskManager));
-                mainPanel.revalidate();
-                mainPanel.repaint();
-            }
-        });
-        top.add(right, BorderLayout.EAST);
+        // Previous / next month arrows
+        top.add(arrow("◀", "<", shown.minusMonths(1), app), BorderLayout.WEST);
+        top.add(arrow("▶", ">", shown.plusMonths(1), app), BorderLayout.EAST);
 
         add(top, BorderLayout.NORTH);
 
         //Days
-        Color header = Color.decode("#f90069");
-        JPanel days = new JPanel(new GridLayout(7,7));
-        days.setBackground(null);
+        JPanel days = new JPanel(new GridLayout(7, 7));
+        days.setOpaque(false);
 
-        days.add(new DayLabel("Su", header, Color.white, false));
-        days.add(new DayLabel("Mo", header, Color.white, false));
-        days.add(new DayLabel("Tu", header, Color.white, false));
-        days.add(new DayLabel("We", header, Color.white, false));
-        days.add(new DayLabel("Th", header, Color.white, false));
-        days.add(new DayLabel("Fr", header, Color.white, false));
-        days.add(new DayLabel("Sa", header, Color.white, false));
-
-        String[] weekDays = new String[] {"SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"};
-
-        LocalDate firstDay = LocalDate.of(year, month, 1);
-
-        int j = 0;
-        while(!firstDay.getDayOfWeek().toString().equals(weekDays[j])) {
-            days.add(new DayLabel("", Color.decode("#f0f0f0"), Color.black, false));
-            j++;
+        for (String weekDay : WEEK_DAYS) {
+            days.add(new DayLabel(weekDay, Theme.PINK, Color.WHITE, false));
         }
 
-        int daysNum = YearMonth.of(year, month).lengthOfMonth();
+        // DayOfWeek runs Monday=1 .. Sunday=7; the grid starts on Sunday
+        int offset = shown.atDay(1).getDayOfWeek().getValue() % 7;
+        for (int i = 0; i < offset; i++) days.add(emptyCell());
+
+        LocalDate selectedDay = app.getSelectedDay();
+        TaskManager taskManager = app.getTaskManager();
+        int daysNum = shown.lengthOfMonth();
 
         for (int i = 1; i <= daysNum; i++) {
-            final int day = i;
+            LocalDate currentDate = shown.atDay(i);
 
-            DayLabel dayLabel;
-            LocalDate currentDate = LocalDate.of(year, month, i);
-
+            Color background;
+            Color foreground = Color.BLACK;
             if (selectedDay.equals(currentDate)) {
-                dayLabel = new DayLabel(i + "", Color.decode("#0ecf78"), Color.black, true);
+                background = Theme.GREEN;
             } else if (taskManager.hasTasksForDate(currentDate)) {
-                dayLabel = new DayLabel(i + "", Color.decode("#00d1e8"), Color.black, true);
+                background = Theme.TEAL;
             } else {
-                dayLabel = new DayLabel(i + "", Color.decode("#f0f0f0"), Color.black, true);
+                background = Theme.cell();
+                foreground = Theme.text();
             }
 
-            dayLabel.addMouseListener(new MouseListener() {
-                @Override
-                public void mouseReleased(MouseEvent e) {}
-                @Override
-                public void mousePressed(MouseEvent e) {}
-                @Override
-                public void mouseExited(MouseEvent e) {}
-                @Override
-                public void mouseEntered(MouseEvent e) {}
-
+            DayLabel dayLabel = new DayLabel(String.valueOf(i), background, foreground, true);
+            dayLabel.addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
-                    mainPanel.removeAll();
-                    LocalDate selected = LocalDate.of(year, month, day);
-                    mainPanel.add(new Calendar(year, month, selected, mainPanel, taskManager));
-                    mainPanel.add(new Events(selected, mainPanel, taskManager));
-                    mainPanel.revalidate();
-                    mainPanel.repaint();
+                    app.selectDay(currentDate);
                 }
             });
-
             days.add(dayLabel);
         }
 
         // Fill remaining cells
-        int totalCells = 42;
-        int usedCells = j + daysNum;
-        for (int i = usedCells; i < totalCells; i++) {
-            days.add(new DayLabel("", Color.decode("#f0f0f0"), Color.black, false));
-        }
+        for (int i = offset + daysNum; i < TOTAL_CELLS; i++) days.add(emptyCell());
 
         add(days, BorderLayout.CENTER);
+    }
+
+    private static DayLabel emptyCell() {
+        return new DayLabel("", Theme.cell(), Theme.text(), false);
+    }
+
+    private static JLabel arrow(String symbol, String fallback, YearMonth target, App app) {
+        Font font = Theme.font(Font.BOLD, 20);
+        JLabel arrow = new JLabel(Theme.glyph(font, symbol, fallback));
+        arrow.setFont(font);
+        arrow.setForeground(Theme.GREEN);
+        arrow.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        arrow.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                app.showMonth(target.getYear(), target.getMonthValue());
+            }
+        });
+        return arrow;
     }
 }

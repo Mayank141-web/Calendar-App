@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=MyCalendar
+Comment=Calendar and task manager
+Exec=AppRun
+Icon=mycalendar
+Categories=Office;Calendar;
+Terminal=false
