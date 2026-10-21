@@ -12,10 +12,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.security.MessageDigest;
+import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
@@ -241,6 +244,18 @@ public final class Updater {
             builder = new ProcessBuilder("/bin/sh", "-c", UNIX_INSTALLER, "mycalendar-update",
                     pid, install.kind, install.download.toString(), install.target.toString());
         }
+        // The jpackage launcher sets these for itself; a restarted launcher that inherits them fails to start
+        Map<String, String> env = builder.environment();
+        env.remove("_JPACKAGE_LAUNCHER");
+        String libraryPath = env.remove("LD_LIBRARY_PATH");
+        if (libraryPath != null) {
+            String appRoot = Paths.get(System.getProperty("jpackage.app-path")).getParent().getParent().toString();
+            String cleaned = Arrays.stream(libraryPath.split(":"))
+                    .filter(entry -> !entry.isEmpty() && !entry.startsWith(appRoot))
+                    .collect(Collectors.joining(":"));
+            if (!cleaned.isEmpty()) env.put("LD_LIBRARY_PATH", cleaned);
+        }
+
         File log = new File(System.getProperty("java.io.tmpdir"), "mycalendar-update.log");
         builder.redirectErrorStream(true)
                .redirectOutput(log)

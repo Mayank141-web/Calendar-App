@@ -1,0 +1,70 @@
+# One-off: rebuilds the original v1.0 (macOS only, as first released) from the FirstVersion tag
+# and republishes it as an older release. v2.x stays the "Latest" release.
+name: Restore v1.0 release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build v1.0 (${{ matrix.label }})
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            label: macOS-AppleSilicon
+          - os: macos-15-intel
+            label: macOS-Intel
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: FirstVersion
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Build the v1.0 app
+        working-directory: Calendar-App-main/CalendarApp
+        run: |
+          javac --release 17 -d build/classes src/main/java/Calendar/*.java
+          mkdir -p build/jar
+          jar --create --file build/jar/CalendarApp.jar --main-class Calendar.Main -C build/classes .
+          jpackage --name CalendarApp --app-version 1.0 --type dmg --dest build/out \
+            --input build/jar --main-jar CalendarApp.jar --main-class Calendar.Main \
+            --add-modules java.desktop,java.prefs
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          mv build/out/*.dmg "$GITHUB_WORKSPACE/dist/CalendarApp-1.0-${{ matrix.label }}.dmg"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v1-${{ matrix.label }}
+          path: dist/*
+
+  release:
+    name: Publish v1.0
+    needs: build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Collect files and checksums
+        run: |
+          mkdir -p release
+          find artifacts -type f -exec mv {} release/ \;
+          (cd release && sha256sum -- * > SHA256SUMS.txt)
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: MyCalendar v1.0
+          tag_name: FirstVersion
+          make_latest: false
+          files: release/*
+          body: |
+            This is the first version. I might make updates, maybe not, I don't know
+
+            ---
+            **Older version.** For Windows, Linux, Light/Dark Mode and automatic updates, get the [latest release](https://github.com/Mayank141-web/Calendar-App/releases/latest).
+            These macOS files were rebuilt from the original v1.0 source (the `FirstVersion` tag).
