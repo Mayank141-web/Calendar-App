@@ -3,8 +3,6 @@
 name: Restore v1.0 release
 
 on:
-  push:
-    branches: [claude/fervent-knuth-0y7bmk]  # temporary: restores v1.0 from this branch
   workflow_dispatch:
 
 permissions:
