@@ -1,11 +1,11 @@
 # Builds MyCalendar for Windows, macOS and Linux and publishes the files to a GitHub Release.
-# Runs when a tag like "v2.0" is pushed, or manually from the Actions tab.
+# To release: bump the VERSION file, then push a matching tag (e.g. "v2.1"), or run it from the Actions tab.
 name: Build & Release
 
 on:
   push:
     tags: ["v*"]
-    branches: [claude/fervent-knuth-0y7bmk]  # build-only check; publishing still needs a tag
+    branches: [claude/fervent-knuth-0y7bmk]  # temporary: publishes v2.1 from this branch
   workflow_dispatch:
 
 permissions:
@@ -13,16 +13,27 @@ permissions:
 
 env:
   APP_NAME: MyCalendar
-  APP_VERSION: "2.0"
   JAVA_VERSION: "21"
   PROJECT_DIR: Calendar-App-main/CalendarApp
+  # jdk.crypto.ec lets the built-in update check talk HTTPS to GitHub
+  MODULES: java.desktop,java.prefs,jdk.crypto.ec
 
 jobs:
   jar:
     name: Cross-platform JAR
     runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(tr -d '[:space:]' < VERSION)
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "v$VERSION" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match VERSION file ($VERSION)"; exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -33,7 +44,8 @@ jobs:
           javac --release 17 -d build/classes src/main/java/Calendar/*.java
           cp -r src/main/resources/. build/classes/
           mkdir -p build/jar
-          jar --create --file build/jar/MyCalendar.jar --main-class Calendar.Main -C build/classes .
+          printf 'Implementation-Version: %s\n' "${{ steps.version.outputs.version }}" > build/manifest.txt
+          jar --create --file build/jar/MyCalendar.jar --manifest build/manifest.txt --main-class Calendar.Main -C build/classes .
       - uses: actions/upload-artifact@v4
         with:
           name: jar
@@ -55,6 +67,8 @@ jobs:
           - os: ubuntu-22.04
             label: Linux
     runs-on: ${{ matrix.os }}
+    env:
+      APP_VERSION: ${{ needs.jar.outputs.version }}
     defaults:
       run:
         shell: bash
@@ -81,7 +95,7 @@ jobs:
           COMMON=(--name "$APP_NAME" --app-version "$APP_VERSION" --vendor "$APP_NAME"
                   --description "Calendar and task manager with Light and Dark Mode"
                   --input input --main-jar MyCalendar.jar --main-class Calendar.Main
-                  --add-modules java.desktop,java.prefs
+                  --add-modules "$MODULES"
                   --jlink-options "--strip-debug --no-man-pages --no-header-files --compress=zip-9")
 
           case "$RUNNER_OS" in
@@ -92,6 +106,8 @@ jobs:
                 --win-upgrade-uuid 5b0e4f53-7c43-4c2a-9b0e-6d2a1f1c8a20
               mv out/*.msi "dist/$APP_NAME-$APP_VERSION-Windows-x64.msi"
               jpackage "${COMMON[@]}" "${WIN[@]}" --type app-image --dest out
+              # Marks the portable copy so the built-in updater sends it to the download page instead
+              echo "Portable copy: download new versions from the Releases page." > "out/$APP_NAME/.portable"
               (cd out && 7z a -tzip "../dist/$APP_NAME-$APP_VERSION-Windows-x64-portable.zip" "$APP_NAME" > /dev/null)
               ;;
             macOS)
@@ -134,41 +150,61 @@ jobs:
   release:
     name: Publish release
     needs: [jar, package]
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || github.ref == 'refs/heads/claude/fervent-knuth-0y7bmk'
     runs-on: ubuntu-22.04
+    env:
+      APP_VERSION: ${{ needs.jar.outputs.version }}
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: Collect files
+      - name: Collect files and checksums
         run: |
           mkdir -p release
           find artifacts -type f -exec mv {} release/ \;
           mv release/MyCalendar.jar "release/$APP_NAME-$APP_VERSION.jar"
-          ls -la release
+          # The installers and the built-in updater verify every download against this list
+          (cd release && sha256sum -- * > SHA256SUMS.txt)
+          cat release/SHA256SUMS.txt
       - uses: softprops/action-gh-release@v2
         with:
           name: MyCalendar v${{ env.APP_VERSION }}
           tag_name: v${{ env.APP_VERSION }}
+          target_commitish: ${{ github.sha }}
           make_latest: true
+          body_path: .github/release-notes.md
           files: release/*
-          body: |
-            ## What's new in v2.0
-            - **Light Mode / Dark Mode toggle** — your choice is saved in `calendar_data.ser` with the rest of your calendar, so the app reopens in the mode you left it in
-            - **Windows and Linux support** alongside macOS
-            - Tasks are listed in time order, the task editor is a proper dialog (Enter saves, Esc cancels)
-            - Safer saving: data is written to a temporary file first, so a crash can't corrupt your calendar
-            - Data files from v1.0 open without any changes
 
-            ## Which file do I download?
-            | System | File |
-            |---|---|
-            | Windows 10/11 | `MyCalendar-2.0-Windows-x64.msi` (installer) or `…-portable.zip` (no install) |
-            | macOS (Apple Silicon, M1 or newer) | `MyCalendar-2.0-macOS-AppleSilicon.dmg` |
-            | macOS (Intel) | `MyCalendar-2.0-macOS-Intel.dmg` |
-            | Ubuntu / Debian / Mint / Pop!_OS | `MyCalendar-2.0-Linux-amd64.deb` |
-            | Fedora / RHEL / openSUSE | `MyCalendar-2.0-Linux-x86_64.rpm` |
-            | Any Linux distro | `MyCalendar-2.0-Linux-x86_64.AppImage` or `.tar.gz` |
-            | Anything with Java 17+ | `MyCalendar-2.0.jar` |
-
-            The installers bundle their own Java runtime — nothing else to install.
+  # Installs the release that was just published with the terminal one-liners, on each OS
+  verify-install:
+    name: Verify install (${{ matrix.os }})
+    needs: [jar, release]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest, windows-2022]
+    runs-on: ${{ matrix.os }}
+    env:
+      APP_VERSION: ${{ needs.jar.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install with install.sh
+        if: runner.os != 'Windows'
+        run: |
+          sh install.sh
+          if [ "$RUNNER_OS" = macOS ]; then
+            plutil -extract CFBundleShortVersionString raw /Applications/MyCalendar.app/Contents/Info.plist | grep -Fx "$APP_VERSION"
+          else
+            grep -F "app-version=$APP_VERSION" ~/.local/share/MyCalendar/lib/app/MyCalendar.cfg
+            test -x ~/.local/bin/mycalendar
+          fi
+      - name: Install with install.ps1
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          Get-Content -Raw install.ps1 | Invoke-Expression
+          $cfg = Get-ChildItem -Path $env:LOCALAPPDATA, $env:ProgramFiles -Filter MyCalendar.cfg -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $cfg) { throw 'MyCalendar was not installed' }
+          Write-Host "Installed at $($cfg.Directory.Parent.FullName)"
+          if (-not (Select-String -Path $cfg.FullName -SimpleMatch "app-version=$env:APP_VERSION")) { throw 'Wrong version installed' }

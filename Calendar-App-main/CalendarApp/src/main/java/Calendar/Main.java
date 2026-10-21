@@ -8,6 +8,7 @@ import java.util.Locale;
 public class Main {
     public static void main(String[] args) {
         // Must be set before any AWT class loads
+        System.setProperty("java.net.useSystemProxies", "true"); // update check works behind proxies
         String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (os.contains("mac")) {
             System.setProperty("apple.awt.application.name", "MyCalendar");
@@ -18,7 +19,8 @@ public class Main {
         }
 
         SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("MyCalendar");
+            String version = Updater.currentVersion();
+            JFrame frame = new JFrame(version != null ? "MyCalendar " + version : "MyCalendar");
             frame.setSize(1100, 620);
             frame.setMinimumSize(new Dimension(900, 500));
             frame.setLocationRelativeTo(null);
@@ -53,6 +55,7 @@ public class Main {
                     new App(frame, taskManager);
                     // Saves everything, including the current Light/Dark mode, when the app closes
                     Runtime.getRuntime().addShutdownHook(new Thread(taskManager::saveData));
+                    Updater.checkInBackground(frame);
                 }
             }.execute();
         });

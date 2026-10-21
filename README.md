@@ -13,6 +13,8 @@ The app has two panels: a **monthly calendar** on the left and a **task list** o
 ## Features
 
 - **Light Mode / Dark Mode toggle**: one click switches the whole app. The choice is stored in `calendar_data.ser` with your tasks, so the app opens in the mode you last used
+- **One-command install from the terminal** on Windows, macOS and Linux
+- **Automatic updates**: the app checks for a new version each time it starts and installs it with one click, keeping your calendar
 - **Cross-platform**: native installers for Windows, macOS (Apple Silicon and Intel) and Linux (any distro), plus a plain `.jar` for any system with Java
 - **Monthly calendar view** with previous/next month buttons
 - **Per-day task panel** listing that day's tasks in time order
@@ -24,19 +26,64 @@ The app has two panels: a **monthly calendar** on the left and a **task list** o
 
 ---
 
+## Install from the terminal
+
+The quickest way to install, on any OS. No admin rights needed.
+
+**macOS / Linux** (Terminal):
+```bash
+curl -fsSL https://raw.githubusercontent.com/Mayank141-web/Calendar-App/main/install.sh | sh
+```
+
+**Windows** (PowerShell):
+```powershell
+irm https://raw.githubusercontent.com/Mayank141-web/Calendar-App/main/install.ps1 | iex
+```
+
+The script downloads the latest release for your system, checks it against the release's `SHA256SUMS.txt`, and installs it:
+
+| System | Installed to | Start it with |
+|---|---|---|
+| macOS | `/Applications/MyCalendar.app` (or `~/Applications` if `/Applications` isn't writable) | Launchpad, Spotlight, or `open -a MyCalendar` |
+| Linux (any x86_64 distro) | `~/.local/share/MyCalendar`, plus an applications-menu entry | the applications menu, or `mycalendar` |
+| Windows 10 / 11 | your user's programs folder, via the `.msi` | the Start menu or the desktop shortcut |
+
+Running the command again updates to the newest version. Apps installed this way aren't blocked by macOS Gatekeeper or the "damaged" warning.
+
+---
+
+## Automatic updates
+
+Each time MyCalendar starts, it checks this repo's latest release in the background. If there's a newer version, it asks whether to **Update now**. Clicking it:
+
+1. downloads the right file for your system from the release,
+2. verifies it against the release's `SHA256SUMS.txt` (a mismatch cancels the update),
+3. closes MyCalendar (saving your calendar), swaps in the new version, and reopens it.
+
+| How you installed | Updates |
+|---|---|
+| Terminal command, `.msi`, `.dmg`, AppImage, `.tar.gz` | Automatic, with one click |
+| `.deb` / `.rpm` (installed system-wide), portable `.zip`, `.jar` | You get a notice with a link to the new download |
+
+If there's no internet connection, the check is silently skipped until next time.
+
+> **Coming from v2.0?** v2.0 didn't have the updater yet, so install the new version once yourself, using the terminal command or a download. Updates are automatic from then on, and your calendar carries over.
+
+---
+
 ## Download
 
-Get the latest version, **MyCalendar v2.0**, from the [Releases](../../releases/latest) page.
+You can also download a file directly. Get the latest version from the [Releases](../../releases/latest) page.
 
 | System | File |
 |---|---|
-| Windows 10 / 11 | `MyCalendar-2.0-Windows-x64.msi` (installer) or `MyCalendar-2.0-Windows-x64-portable.zip` (no install needed) |
-| macOS: Apple Silicon (M1 or newer) | `MyCalendar-2.0-macOS-AppleSilicon.dmg` |
-| macOS: Intel | `MyCalendar-2.0-macOS-Intel.dmg` |
-| Ubuntu, Debian, Linux Mint, Pop!_OS, elementary… | `MyCalendar-2.0-Linux-amd64.deb` |
-| Fedora, RHEL, CentOS, openSUSE… | `MyCalendar-2.0-Linux-x86_64.rpm` |
-| **Any** Linux distro (Arch, Manjaro, Gentoo, …) | `MyCalendar-2.0-Linux-x86_64.AppImage` or `MyCalendar-2.0-Linux-x86_64.tar.gz` |
-| Anything else with Java 17+ installed | `MyCalendar-2.0.jar` |
+| Windows 10 / 11 | `MyCalendar-2.1-Windows-x64.msi` (installer) or `MyCalendar-2.1-Windows-x64-portable.zip` (no install needed) |
+| macOS: Apple Silicon (M1 or newer) | `MyCalendar-2.1-macOS-AppleSilicon.dmg` |
+| macOS: Intel | `MyCalendar-2.1-macOS-Intel.dmg` |
+| Ubuntu, Debian, Linux Mint, Pop!_OS, elementary… | `MyCalendar-2.1-Linux-amd64.deb` |
+| Fedora, RHEL, CentOS, openSUSE… | `MyCalendar-2.1-Linux-x86_64.rpm` |
+| **Any** Linux distro (Arch, Manjaro, Gentoo, …) | `MyCalendar-2.1-Linux-x86_64.AppImage` or `MyCalendar-2.1-Linux-x86_64.tar.gz` |
+| Anything else with Java 17+ installed | `MyCalendar-2.1.jar` |
 
 The installers include their own Java runtime, so you don't need to install anything else.
 
@@ -46,11 +93,11 @@ The installers include their own Java runtime, so you don't need to install anyt
   > Windows SmartScreen may warn that the app is from an unknown publisher because it isn't code-signed. Click **More info → Run anyway**.
 - **macOS**: open the `.dmg` and drag **MyCalendar** into Applications.
   > macOS may block the first launch because the app isn't notarized. Go to **System Settings → Privacy & Security** and click **Open Anyway**. If macOS says the app is "damaged", run `xattr -cr /Applications/MyCalendar.app` in Terminal.
-- **Linux (.deb)**: `sudo apt install ./MyCalendar-2.0-Linux-amd64.deb`
-- **Linux (.rpm)**: `sudo dnf install ./MyCalendar-2.0-Linux-x86_64.rpm` (or `sudo zypper install …` on openSUSE)
-- **Linux (AppImage)**: `chmod +x MyCalendar-2.0-Linux-x86_64.AppImage` and double-click it, or run `./MyCalendar-2.0-Linux-x86_64.AppImage`
-- **Linux (.tar.gz)**: `tar -xzf MyCalendar-2.0-Linux-x86_64.tar.gz` and run `./MyCalendar/bin/MyCalendar`
-- **JAR**: `java -jar MyCalendar-2.0.jar`
+- **Linux (.deb)**: `sudo apt install ./MyCalendar-2.1-Linux-amd64.deb`
+- **Linux (.rpm)**: `sudo dnf install ./MyCalendar-2.1-Linux-x86_64.rpm` (or `sudo zypper install …` on openSUSE)
+- **Linux (AppImage)**: `chmod +x MyCalendar-2.1-Linux-x86_64.AppImage` and double-click it, or run `./MyCalendar-2.1-Linux-x86_64.AppImage`
+- **Linux (.tar.gz)**: `tar -xzf MyCalendar-2.1-Linux-x86_64.tar.gz` and run `./MyCalendar/bin/MyCalendar`
+- **JAR**: `java -jar MyCalendar-2.1.jar`
 
 The .deb, .rpm and .tar.gz installs place the app in `/opt/mycalendar` and add it to the application menu.
 
@@ -67,6 +114,7 @@ Calendar-App-main/CalendarApp/
 │   ├── Calendar.java      # Left panel: interactive monthly grid
 │   ├── Events.java        # Right panel: task list, Light/Dark toggle, Add Task button
 │   ├── TaskEditor.java    # Modal dialog for creating and editing tasks
+│   ├── Updater.java       # Checks for new releases, verifies and installs them
 │   ├── TaskManager.java   # Data layer: tasks + Light/Dark setting, file save/load/search
 │   ├── Task.java          # Serializable task model (title, description, dateTime)
 │   └── DayLabel.java      # Styled JLabel used for calendar day cells
@@ -74,6 +122,8 @@ Calendar-App-main/CalendarApp/
 │   └── icon.png           # Window icon
 └── packaging/             # App icons (.ico / .icns / .png) and the Linux desktop entry
 .github/workflows/release.yml   # Builds every installer and publishes the GitHub Release
+install.sh / install.ps1        # Terminal installers (macOS/Linux and Windows)
+VERSION                         # The app's version number, used by the release build
 ```
 
 ---
@@ -112,12 +162,12 @@ java -jar build/MyCalendar.jar
 
 ### Packaging a native app yourself
 
-`jpackage` (part of JDK 17+) builds an installer for the OS you run it on. Put the JAR in its own folder first (for example `build/jar/MyCalendar.jar`), then run:
+`jpackage` (part of JDK 17+) builds an installer for the OS you run it on. Put the JAR in its own folder first (for example `build/jar/MyCalendar.jar`), then run the command below. `--app-version` must match `VERSION` so the updater knows which version is installed.
 
 ```bash
-jpackage --name MyCalendar --app-version 2.0 \
+jpackage --name MyCalendar --app-version 2.1 \
   --input build/jar --main-jar MyCalendar.jar --main-class Calendar.Main \
-  --add-modules java.desktop,java.prefs \
+  --add-modules java.desktop,java.prefs,jdk.crypto.ec \
   --type <TYPE> --icon packaging/<ICON>
 ```
 
@@ -130,7 +180,7 @@ jpackage --name MyCalendar --app-version 2.0 \
 
 ### Releases
 
-Pushing a tag like `v2.0` runs the [Build & Release](.github/workflows/release.yml) workflow. It builds the JAR, the Windows `.msi`/`.zip`, the macOS `.dmg` files (Apple Silicon and Intel), and the Linux `.deb`/`.rpm`/`.AppImage`/`.tar.gz` on GitHub's own Windows, macOS and Linux machines, then attaches them all to a GitHub Release.
+To publish a new version, change the number in `VERSION` (for example to `2.2`), then push a matching tag (`v2.2`). Installed copies offer the update the next time they start. Pushing the tag runs the [Build & Release](.github/workflows/release.yml) workflow. It builds the JAR, the Windows `.msi`/`.zip`, the macOS `.dmg` files (Apple Silicon and Intel), and the Linux `.deb`/`.rpm`/`.AppImage`/`.tar.gz` on GitHub's own Windows, macOS and Linux machines, then attaches them all to a GitHub Release along with `SHA256SUMS.txt`. Finally it installs the new release with the terminal commands on Windows, macOS and Linux to check they work.
 
 ---
 
